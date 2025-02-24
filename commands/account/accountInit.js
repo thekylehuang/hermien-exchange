@@ -42,7 +42,14 @@ module.exports = {
     usersFile[user.id] = {
       username: user.username,
       balance: 1000,
-      stocks: []
+      portfolio: {
+        'SQRE': 0,
+        'TRI': 0,
+        'CRC': 0,
+        'HEX': 0,
+        'PENT': 0,
+        'DECA': 0
+      }
     };
 
     writeUsersFile(usersFile);
