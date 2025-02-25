@@ -2,29 +2,22 @@ const path = require('path');
 const fs = require("fs");
 const { SlashCommandBuilder, EmbedBuilder } = require('discord.js');
 
-const accountPath = path.join(__dirname, '../account','users.json');
+const accountPath = path.join(__dirname, '../account', 'users.json');
 const pricesPath = path.join(__dirname, 'stocks.json');
 
-// Read the stock prices from file
-const readPricesFile = () => {
+// Read and parse JSON files
+const readJSON = (filePath) => {
   try {
-    const data = fs.readFileSync(pricesPath, 'utf8');
-    return JSON.parse(data);
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
   } catch (error) {
-    console.error('Error reading stock prices:', error);
+    console.error(`Error reading file ${filePath}:`, error);
     return {};
   }
 };
 
-// Read the users data from file
-const readUsersFile = () => {
-  try {
-    const data = fs.readFileSync(accountPath, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Error reading users data:', error);
-    return {};
-  }
+// Write updated data back to JSON file
+const writeJSON = (filePath, data) => {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 };
 
 module.exports = {
@@ -41,8 +34,7 @@ module.exports = {
           { name: 'CRC', value: 'CRC' },
           { name: 'HEX', value: 'HEX' },
           { name: 'PENT', value: 'PENT' },
-          { name: 'DECA', value: 'DECA' },
-          { name: 'All Stocks', value: 'ALL' }
+          { name: 'DECA', value: 'DECA' }
         )
     )
     .addIntegerOption(option =>
@@ -53,57 +45,70 @@ module.exports = {
   async execute(interaction) {
     const stockChoice = interaction.options.getString('stock');
     const stockQuantity = interaction.options.getInteger('quantity');
-    const priceData = readPricesFile();
 
-    // Check if stock choice is valid
+    const priceData = readJSON(pricesPath);
+    const users = readJSON(accountPath);
+    const userId = interaction.user.id;
+
     if (!priceData[stockChoice]) {
       return interaction.reply(`Invalid stock choice: ${stockChoice}`);
     }
 
-    const stockPrice = priceData[stockChoice].prices[priceData[stockChoice].prices.length - 1];
+    const stock = priceData[stockChoice];
+    if (stock.prices.length === 0) {
+      return interaction.reply(`Stock ${stockChoice} has no price history.`);
+    }
+
+    const stockPrice = stock.prices[stock.prices.length - 1];
     const totalCost = stockPrice * stockQuantity;
 
-    const users = readUsersFile(); // Read users data
-    const userId = interaction.user.id;
-
-    // Check if the user has an account
     if (!users[userId]) {
-      return await interaction.reply(`You need an account, ${interaction.user.username}. You can register for one with the /init command.`);
+      return await interaction.reply(`You need an account, ${interaction.user.username}. Register using /init.`);
     }
 
     const user = users[userId];
 
-    // Check if the user has enough balance
-    if (user.balance >= totalCost) {
-      // Deduct balance and update portfolio
-      user.balance -= totalCost;
-      if (!user.portfolio[stockChoice]) {
-        user.portfolio[stockChoice] = 0;  // Initialize the stock in the portfolio if not already present
-      }
-      user.portfolio[stockChoice] += stockQuantity;
-
-      // Write the updated data back to the file
-      fs.writeFileSync(accountPath, JSON.stringify(users, null, 2));
-
-      // Create the success embed
-      const embed = new EmbedBuilder()
-        .setColor(0xFFFFFF)
-        .setTitle('Purchase successful!')
-        .setDescription(`You purchased ${stockQuantity} shares of ${stockChoice}.`)
-        .addFields(
-          { name: 'Remaining Balance', value: `$${user.balance}`, inline: true },
-          { name: 'Stock Portfolio', value: `${stockChoice}: ${user.portfolio[stockChoice]}`, inline: true }
-        );
-
-      return interaction.reply({ embeds: [embed] });
-    } else {
-      // Insufficient funds
-      const embed = new EmbedBuilder()
-        .setColor(0xFFFFFF)
-        .setTitle('Insufficient funds')
-        .setDescription(`You do not have enough funds to purchase ${stockQuantity} shares of ${stockChoice}.`);
-
-      return interaction.reply({ embeds: [embed] });
+    if (user.balance < totalCost) {
+      return interaction.reply({ 
+        embeds: [
+          new EmbedBuilder()
+            .setColor(0xFFFFFF)
+            .setTitle('Insufficient Funds')
+            .setDescription(`You don't have enough money to buy ${stockQuantity} shares of ${stockChoice}.`)
+        ]
+      });
     }
+
+    // Deduct balance and update portfolio
+    user.balance -= totalCost;
+    user.portfolio[stockChoice] = (user.portfolio[stockChoice] || 0) + stockQuantity;
+
+    // Increase total shares in circulation
+    stock.shares += stockQuantity;
+
+    // Adjust stock price based on demand
+    const demandFactor = 1 + (stockQuantity / stock.shares) * 0.1;
+    const newPrice = Math.round(stockPrice * demandFactor * 100) / 100;
+
+    stock.prices.push(newPrice);
+    stock.timestamps.push(Date.now());
+
+    // Write updates to files
+    writeJSON(accountPath, users);
+    writeJSON(pricesPath, priceData);
+
+    return interaction.reply({ 
+      embeds: [
+        new EmbedBuilder()
+          .setColor(0xFFFFFF)
+          .setTitle('Purchase Successful!')
+          .setDescription(`You bought ${stockQuantity} shares of ${stockChoice} for $${Math.round(totalCost * 100) / 100}.`)
+          .addFields(
+            { name: 'New Stock Price', value: `$${newPrice}`, inline: true },
+            { name: 'Remaining Balance', value: `$${Math.round(user.balance * 100) / 100}`, inline: true },
+            { name: 'Stock Portfolio', value: `${stockChoice}: ${user.portfolio[stockChoice]}`, inline: true }
+          )
+      ]
+    });
   }
 };

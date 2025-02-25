@@ -27,7 +27,7 @@ module.exports = {
       return await interaction.reply(`You need an account, ${user.username}. You can register for one with the /init command.`);
     }
 
-    const balance = usersFile[user.id].balance;
+    const balance = Math.round(usersFile[user.id].balance * 100) / 100;
     const portfolio = usersFile[user.id].portfolio;
     
     // Create the portfolio string

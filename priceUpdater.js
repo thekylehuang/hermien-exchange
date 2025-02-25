@@ -8,26 +8,33 @@ const STOCKS = ["SQRE", "TRI", "CRC", "HEX", "PENT", "DECA"];
 const VOLATILITY = {
     SQRE: 1.5,
     TRI: 1.0,
-    CRC: 0.8,
-    HEX: 50, // Super Volatile
-    PENT: 0.5, // Stable
+    CRC: 1.4,
+    HEX: 1.3,
+    PENT: 0.5,
     DECA: 1.2
 };
 
-const TREND_PROBABILITY = 0.75 // Chance to follow market trend
-const EVENT_PROBABILITY = 0.02 // Chance of a market event
+const TREND_PROBABILITY = 0.75; // Chance to follow market trend
+const EVENT_PROBABILITY = 0.02; // Chance of a market event
 
-function generatePrice(lastPrice, stock){
-    let change = (Math.random() - 0.5) * VOLATILITY[stock]; 
+function generatePrice(lastPrice, stock, shares) {
+    let change = (Math.random() - 0.5) * VOLATILITY[stock];
+
+    // Adjusting price based on shares in circulation
+    let shareAdjustmentFactor = 1 - (shares / 10000); // Assume max shares in circulation is 10,000
+    change += change * shareAdjustmentFactor; // If shares are high, price decreases
+
     // Reinforcing a trend
     if (Math.random() < TREND_PROBABILITY) {
         change += Math.sign(change) * Math.random();
     }
+
     // Rare market event
     if (Math.random() < EVENT_PROBABILITY) {
-        change *= (Math.random() > 0.5 ? 25 : -25); // Half chance of pumping or dumping
+        change *= (Math.random() > 0.5 ? 25 : -25);
     }
-    return Math.max(1, lastPrice + change); // Price will always be above 1
+
+    return Math.max(0.01, lastPrice + change);
 }
 
 function updatePrices() {
@@ -37,7 +44,8 @@ function updatePrices() {
     STOCKS.forEach((stock) => {
         let stockData = data[stock];
         let lastPrice = stockData.prices.length ? stockData.prices[stockData.prices.length - 1] : 100;
-        let newPrice = generatePrice(lastPrice, stock);
+        let shares = stockData.shares || 10000;
+        let newPrice = generatePrice(lastPrice, stock, shares);
         stockData.timestamps.push(timestamp);
         stockData.prices.push(newPrice);
 
