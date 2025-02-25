@@ -102,7 +102,7 @@ module.exports = {
         new EmbedBuilder()
           .setColor(0xFFFFFF)
           .setTitle('Sell Successful!')
-          .setDescription(`You sold ${stockQuantity} shares of ${stockChoice} for $${totalValue}.`)
+          .setDescription(`You sold ${stockQuantity} shares of ${stockChoice} for $${Math.round(totalValue * 100) / 100}.`)
           .addFields(
             { name: 'New Stock Price', value: `$${newPrice}`, inline: true },
             { name: 'Remaining Balance', value: `$${Math.round(user.balance * 100) / 100}`, inline: true },
